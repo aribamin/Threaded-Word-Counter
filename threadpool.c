@@ -166,7 +166,7 @@ void *Thread_run(ThreadPool_t *tp) {
 
         // Execute the job if retrieved
         if (job) {
-            job->func(job->arg);  // Run the job function
+            job->func(job->arg);
             free(job);
 
             // Update completed job count and signal if all jobs are done
