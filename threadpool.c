@@ -77,7 +77,7 @@ void ThreadPool_destroy(ThreadPool_t *tp) {
     printf("Thread pool destroyed\n");
 }
 
-// Add a job to the job queue in a first-come, first-served (FCFS) manner
+// Add a job to the job queue in a Shortest Job First (SJF) manner
 // Creates and enqueues a job if the pool is active, or returns false if shutdown
 bool ThreadPool_add_job(ThreadPool_t *tp, thread_func_t func, void *arg) {
     pthread_mutex_lock(&tp->jobs.mutex);
@@ -93,14 +93,18 @@ bool ThreadPool_add_job(ThreadPool_t *tp, thread_func_t func, void *arg) {
         return false;
     }
 
-    // Add job to the end of the queue
-    if (tp->jobs.head == NULL) {
+    // Insert the job based on size (Shortest Job First)
+    if (tp->jobs.head == NULL || job->size < tp->jobs.head->size) {
+        // Insert at the head if it's the first job or if it's the smallest
+        job->next = tp->jobs.head;
         tp->jobs.head = job;
     } else {
+        // Insert at the correct position based on size
         ThreadPool_job_t *current = tp->jobs.head;
-        while (current->next != NULL) {
+        while (current->next != NULL && current->next->size <= job->size) {
             current = current->next;
         }
+        job->next = current->next;
         current->next = job;
     }
 
@@ -122,7 +126,7 @@ ThreadPool_job_t *ThreadPool_get_job(ThreadPool_t *tp) {
         pthread_cond_wait(&tp->jobs.cond, &tp->jobs.mutex);
     }
 
-    // Retrieve the next job if available
+    // Retrieve the shortest job (already the head due to sorted insertion)
     ThreadPool_job_t *job = NULL;
     if (tp->jobs.size > 0) {
         job = tp->jobs.head;
