@@ -5,7 +5,7 @@
 #include "mapreduce.h"
 #include "threadpool.h"
 
-// Key-value pair structure
+// Defines a structure for a key-value pair in each partition
 typedef struct {
     char *key;
     char **values;
@@ -13,7 +13,7 @@ typedef struct {
     unsigned int value_capacity;
 } KeyValuePair;
 
-// Partition structure containing multiple key-value pairs
+// Defines a structure for a partition, which holds multiple key-value pairs
 typedef struct {
     KeyValuePair *pairs;
     unsigned int pair_count;
@@ -21,37 +21,41 @@ typedef struct {
     pthread_mutex_t lock;
 } Partition;
 
-// Global variables for partitions, user-defined map/reduce functions, and thread pool
+// Global variables for the MapReduce framework
 static Partition *partitions;
 static unsigned int num_partitions;
 static Mapper user_mapper;
 static Reducer user_reducer;
 static ThreadPool_t *thread_pool;
 
-// Insert a key-value pair into the specified partition
+// Inserts a key-value pair into a specified partition
 void insert_into_partition(unsigned int partition_idx, char *key, char *value) {
     Partition *partition = &partitions[partition_idx];
     pthread_mutex_lock(&partition->lock);
 
-    // Check if the key already exists, append value if it does
+    // Check if the key already exists in the partition
     for (unsigned int i = 0; i < partition->pair_count; i++) {
         if (strcmp(partition->pairs[i].key, key) == 0) {
+            // If key exists and value array is full, increase capacity
             if (partition->pairs[i].value_count == partition->pairs[i].value_capacity) {
                 partition->pairs[i].value_capacity *= 2;
                 partition->pairs[i].values = realloc(partition->pairs[i].values, partition->pairs[i].value_capacity * sizeof(char *));
             }
+            // Add the new value to the key's value list
             partition->pairs[i].values[partition->pairs[i].value_count++] = strdup(value);
             pthread_mutex_unlock(&partition->lock);
             return;
         }
     }
 
-    // Key does not exist, create new key-value pair entry
+    // Key does not exist; create a new key-value pair
     if (partition->pair_count == partition->capacity) {
+        // If the partition is full, increase capacity
         partition->capacity *= 2;
         partition->pairs = realloc(partition->pairs, partition->capacity * sizeof(KeyValuePair));
     }
 
+    // Initialize the new key-value pair
     partition->pairs[partition->pair_count].key = strdup(key);
     partition->pairs[partition->pair_count].values = malloc(10 * sizeof(char *));
     partition->pairs[partition->pair_count].values[0] = strdup(value);
@@ -62,7 +66,8 @@ void insert_into_partition(unsigned int partition_idx, char *key, char *value) {
     pthread_mutex_unlock(&partition->lock);
 }
 
-// Hash function to determine partition index
+// Hash function to determine which partition a key should be placed in
+// Uses a simple hash function to return an index within the partition array
 unsigned int MR_Partitioner(char *key, unsigned int num_partitions) {
     unsigned long hash = 5381;
     int c;
@@ -72,22 +77,25 @@ unsigned int MR_Partitioner(char *key, unsigned int num_partitions) {
     return hash % num_partitions;
 }
 
-// Emit function to add a key-value pair to a partition
+// Emit function called by the Mapper to add a key-value pair to a partition
 void MR_Emit(char *key, char *value) {
     if (key == NULL || strlen(key) == 0) {
         printf("[MR_Emit] Skipping empty key.\n");
         return;
     }
+    // Determine the partition index for the key
     unsigned int partition_idx = MR_Partitioner(key, num_partitions);
     printf("[MR_Emit] Key: %s, Value: %s, Partition: %u\n", key, value, partition_idx);
     insert_into_partition(partition_idx, key, value);
 }
 
-// Get the next value for a given key in a specified partition
+// Retrieves the next value associated with a key from a partition
+// Used by the Reducer to iterate through all values of a given key
 char *MR_GetNext(char *key, unsigned int partition_idx) {
     Partition *partition = &partitions[partition_idx];
     pthread_mutex_lock(&partition->lock);
 
+    // Search for the key and return the next available value, if any
     for (unsigned int i = 0; i < partition->pair_count; i++) {
         if (strcmp(partition->pairs[i].key, key) == 0) {
             if (partition->pairs[i].value_count > 0) {
@@ -99,17 +107,21 @@ char *MR_GetNext(char *key, unsigned int partition_idx) {
     }
 
     pthread_mutex_unlock(&partition->lock);
-    return NULL;
+    return NULL;  // No more values for the key
 }
 
 // Reducer task for each partition
+// Calls the user-defined reducer on each key in the partition
 void reduce_task(void *arg) {
     unsigned int partition_idx = *(unsigned int *)arg;
     free(arg);
     Partition *partition = &partitions[partition_idx];
 
+    // For each key in the partition, call the user-defined reducer
     for (unsigned int i = 0; i < partition->pair_count; i++) {
         user_reducer(partition->pairs[i].key, partition_idx);
+        
+        // Free memory for the key and all associated values
         free(partition->pairs[i].key);
         for (unsigned int j = 0; j < partition->pairs[i].value_count; j++) {
             free(partition->pairs[i].values[j]);
@@ -118,12 +130,11 @@ void reduce_task(void *arg) {
     }
 }
 
-// Run the entire MapReduce workflow
+// Executes the MapReduce process, handling map and reduce phases
 void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer reducer, unsigned int num_workers, unsigned int num_parts) {
-    // Initialize global variables and partitions
+    // Initialize partitions and mutexes
     num_partitions = num_parts;
     partitions = malloc(num_parts * sizeof(Partition));
-
     for (unsigned int i = 0; i < num_parts; i++) {
         partitions[i].pairs = malloc(10 * sizeof(KeyValuePair));
         partitions[i].pair_count = 0;
@@ -131,14 +142,14 @@ void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer 
         pthread_mutex_init(&partitions[i].lock, NULL);
     }
 
-    // Set user-defined functions and create a thread pool
+    // Set user-defined functions and create a thread pool for worker threads
     user_mapper = mapper;
     user_reducer = reducer;
     thread_pool = ThreadPool_create(num_workers);
 
     printf("Starting map phase...\n");
 
-    // Map phase: Submit each file as a map job
+    // Map phase: Submit each file to be processed by the mapper
     for (unsigned int i = 0; i < file_count; i++) {
         ThreadPool_add_job(thread_pool, (thread_func_t)mapper, file_names[i]);
     }
@@ -147,7 +158,7 @@ void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer 
 
     printf("Starting reduce phase...\n");
 
-    // Reduce phase: Create reduce tasks for each partition
+    // Reduce phase: Submit a reduce task for each partition
     for (unsigned int i = 0; i < num_parts; i++) {
         unsigned int *partition_idx = malloc(sizeof(unsigned int));
         *partition_idx = i;
@@ -156,7 +167,7 @@ void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer 
     ThreadPool_check(thread_pool);
     printf("Reduce phase completed.\n");
 
-    // Cleanup resources
+    // Clean up resources
     ThreadPool_destroy(thread_pool);
     for (unsigned int i = 0; i < num_parts; i++) {
         pthread_mutex_destroy(&partitions[i].lock);
