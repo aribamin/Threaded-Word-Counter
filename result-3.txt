@@ -1,4 +1,0 @@
-times: 5000
-mapreduce: 5000
-test: 5000
-input: 5000

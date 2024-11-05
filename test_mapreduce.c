@@ -5,29 +5,43 @@
 #include "mapreduce.h"
 #include "threadpool.h"
 
-// Mock functions for Mapper and Reducer
-void mock_mapper(char *file_name) {
-    FILE *file = fopen(file_name, "r");
-    if (!file) {
+// Custom Mapper and Reducer functions for testing
+void test_mapper(char *file_name) {
+    FILE *fp = fopen(file_name, "r");
+    if (!fp) {
         perror("Error opening file");
         return;
     }
 
     char word[256];
-    while (fscanf(file, "%s", word) != EOF) {
+    while (fscanf(fp, "%s", word) != EOF) {
         MR_Emit(word, "1");
     }
 
-    fclose(file);
+    fclose(fp);
 }
 
-void mock_reducer(char *key, unsigned int partition_idx) {
+typedef struct {
+    char word[256];
+    int count;
+} WordCount;
+
+// Global variable to store reduce results for verification
+WordCount reduce_results[256];
+int reduce_result_count = 0;
+
+void test_reducer(char *key, unsigned int partition_idx) {
     int count = 0;
     char *value;
     while ((value = MR_GetNext(key, partition_idx)) != NULL) {
         count += atoi(value);
+        free(value);
     }
-    printf("Word: %s, Count: %d\n", key, count);
+
+    // Store result in global array for verification
+    strcpy(reduce_results[reduce_result_count].word, key);
+    reduce_results[reduce_result_count].count = count;
+    reduce_result_count++;
 }
 
 // Helper function to create a test file with content
@@ -41,76 +55,138 @@ void create_test_file(const char *filename, const char *content) {
     }
 }
 
-// Test 1: Basic MapReduce run with single file and single partition
+// Helper function to verify reduce results
+void verify_result(const char *word, int expected_count) {
+    for (int i = 0; i < reduce_result_count; i++) {
+        if (strcmp(reduce_results[i].word, word) == 0) {
+            assert(reduce_results[i].count == expected_count);
+            printf("Verified %s: count = %d\n", word, reduce_results[i].count);
+            return;
+        }
+    }
+    fprintf(stderr, "Word %s not found in results!\n", word);
+    assert(0);  // Fail if word is not found
+}
+
+// Test 1: Single File, Single Partition
 void test_single_file_single_partition() {
     printf("Test 1: Single File, Single Partition\n");
 
-    create_test_file("test1.txt", "hello world hello");
+    create_test_file("test1.txt", "apple apple banana orange apple");
 
     char *files[] = {"test1.txt"};
-    MR_Run(1, files, mock_mapper, mock_reducer, 2, 1);
-    printf("Test 1 passed: Single file processed with single partition.\n");
+    reduce_result_count = 0;  // Reset results
 
+    // Run MapReduce with 1 partition
+    MR_Run(1, files, test_mapper, test_reducer, 2, 1);
+
+    // Verify results
+    verify_result("apple", 3);
+    verify_result("banana", 1);
+    verify_result("orange", 1);
+
+    // Cleanup
     remove("test1.txt");
+
+    printf("Test 1 passed: Single file, single partition.\n");
 }
 
-// Test 2: Multiple files with single partition
+// Test 2: Multiple Files, Single Partition
 void test_multiple_files_single_partition() {
     printf("Test 2: Multiple Files, Single Partition\n");
 
-    create_test_file("test1.txt", "hello world");
-    create_test_file("test2.txt", "world hello");
+    create_test_file("test2a.txt", "apple orange");
+    create_test_file("test2b.txt", "orange banana apple");
 
-    char *files[] = {"test1.txt", "test2.txt"};
-    MR_Run(2, files, mock_mapper, mock_reducer, 3, 1);
-    printf("Test 2 passed: Multiple files processed with single partition.\n");
+    char *files[] = {"test2a.txt", "test2b.txt"};
+    reduce_result_count = 0;
 
-    remove("test1.txt");
-    remove("test2.txt");
+    // Run MapReduce with 1 partition
+    MR_Run(2, files, test_mapper, test_reducer, 3, 1);
+
+    // Verify results
+    verify_result("apple", 2);
+    verify_result("banana", 1);
+    verify_result("orange", 2);
+
+    // Cleanup
+    remove("test2a.txt");
+    remove("test2b.txt");
+
+    printf("Test 2 passed: Multiple files, single partition.\n");
 }
 
-// Test 3: Single file with multiple partitions
+// Test 3: Single File, Multiple Partitions
 void test_single_file_multiple_partitions() {
     printf("Test 3: Single File, Multiple Partitions\n");
 
-    create_test_file("test1.txt", "foo bar baz foo");
+    create_test_file("test3.txt", "foo bar baz foo foo baz");
 
-    char *files[] = {"test1.txt"};
-    MR_Run(1, files, mock_mapper, mock_reducer, 3, 3);
-    printf("Test 3 passed: Single file processed with multiple partitions.\n");
+    char *files[] = {"test3.txt"};
+    reduce_result_count = 0;
 
-    remove("test1.txt");
+    // Run MapReduce with multiple partitions
+    MR_Run(1, files, test_mapper, test_reducer, 2, 3);
+
+    // Verify results, allowing for partitioning differences
+    verify_result("foo", 3);
+    verify_result("bar", 1);
+    verify_result("baz", 2);
+
+    // Cleanup
+    remove("test3.txt");
+
+    printf("Test 3 passed: Single file, multiple partitions.\n");
 }
 
-// Test 4: Multiple files with multiple partitions
+// Test 4: Multiple Files, Multiple Partitions
 void test_multiple_files_multiple_partitions() {
     printf("Test 4: Multiple Files, Multiple Partitions\n");
 
-    create_test_file("test1.txt", "apple orange banana apple");
-    create_test_file("test2.txt", "banana apple orange");
+    create_test_file("test4a.txt", "dog cat");
+    create_test_file("test4b.txt", "cat mouse dog");
 
-    char *files[] = {"test1.txt", "test2.txt"};
-    MR_Run(2, files, mock_mapper, mock_reducer, 4, 3);
-    printf("Test 4 passed: Multiple files processed with multiple partitions.\n");
+    char *files[] = {"test4a.txt", "test4b.txt"};
+    reduce_result_count = 0;
 
-    remove("test1.txt");
-    remove("test2.txt");
+    // Run MapReduce with multiple partitions
+    MR_Run(2, files, test_mapper, test_reducer, 3, 3);
+
+    // Verify results
+    verify_result("dog", 2);
+    verify_result("cat", 2);
+    verify_result("mouse", 1);
+
+    // Cleanup
+    remove("test4a.txt");
+    remove("test4b.txt");
+
+    printf("Test 4 passed: Multiple files, multiple partitions.\n");
 }
 
-// Test 5: Large input to test stress handling
+// Test 5: Large Input Test
 void test_large_input() {
     printf("Test 5: Large Input Test\n");
 
-    create_test_file("large_test.txt", "repeat word word word repeat repeat word ");
-    
-    char *files[] = {"large_test.txt"};
-    MR_Run(1, files, mock_mapper, mock_reducer, 5, 3);
-    printf("Test 5 passed: Large input handled successfully.\n");
+    create_test_file("test5.txt", "repeat word repeat word repeat word word");
 
-    remove("large_test.txt");
+    char *files[] = {"test5.txt"};
+    reduce_result_count = 0;
+
+    // Run MapReduce with multiple partitions
+    MR_Run(1, files, test_mapper, test_reducer, 5, 3);
+
+    // Verify results
+    verify_result("repeat", 3);
+    verify_result("word", 4);
+
+    // Cleanup
+    remove("test5.txt");
+
+    printf("Test 5 passed: Large input handled.\n");
 }
 
-// Run all tests
+// Main function to run all tests
 int main() {
     test_single_file_single_partition();
     test_multiple_files_single_partition();

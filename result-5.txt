@@ -1,3 +1,0 @@
-This: 5000
-word: 5000
-exactly: 5000
