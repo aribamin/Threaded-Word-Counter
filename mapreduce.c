@@ -158,7 +158,8 @@ void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer 
 
     // Map phase: Submit each file to be processed by the mapper
     for (unsigned int i = 0; i < file_count; i++) {
-        ThreadPool_add_job(thread_pool, (thread_func_t)mapper, file_names[i]);
+        int job_size = 10;
+        ThreadPool_add_job(thread_pool, (thread_func_t)mapper, file_names[i], job_size);
     }
     ThreadPool_check(thread_pool);
     printf("Map phase completed.\n");
@@ -169,7 +170,8 @@ void MR_Run(unsigned int file_count, char *file_names[], Mapper mapper, Reducer 
     for (unsigned int i = 0; i < num_parts; i++) {
         unsigned int *partition_idx = malloc(sizeof(unsigned int));
         *partition_idx = i;
-        ThreadPool_add_job(thread_pool, reduce_task, partition_idx);
+        int job_size = 20;
+        ThreadPool_add_job(thread_pool, reduce_task, partition_idx, job_size);
     }
     ThreadPool_check(thread_pool);
     printf("Reduce phase completed.\n");

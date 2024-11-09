@@ -7,73 +7,80 @@
 typedef void (*thread_func_t)(void *arg);
 
 typedef struct ThreadPool_job_t {
-    thread_func_t func;              // function pointer
-    void *arg;                       // arguments for that function
-    struct ThreadPool_job_t *next;   // pointer to the next job in the queue
-    int size;                        // size of the job (for SJF)
+    thread_func_t func;
+    void *arg;
+    struct ThreadPool_job_t *next;
+    int size;
 } ThreadPool_job_t;
 
 typedef struct {
-    unsigned int size;               // number of jobs in the queue
-    unsigned int total_jobs;         // total jobs submitted to the queue
-    unsigned int completed_jobs;     // number of completed jobs
-    ThreadPool_job_t *head;          // pointer to the first (shortest) job
-    pthread_mutex_t mutex;           // mutex to protect job queue access
-    pthread_cond_t cond;             // condition variable for job queue
-    pthread_cond_t all_jobs_done_cond; // condition variable to signal all jobs done
+    unsigned int size;
+    unsigned int total_jobs;
+    unsigned int completed_jobs;
+    ThreadPool_job_t *head;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    pthread_cond_t all_jobs_done_cond;
 } ThreadPool_job_queue_t;
 
 typedef struct {
-    pthread_t *threads;              // pointer to the array of thread handles
-    ThreadPool_job_queue_t jobs;     // queue of jobs waiting for a thread to run
-    unsigned int num_threads;        // number of threads in the pool
-    bool shutdown;                   // flag for shutting down the pool
+    pthread_t *threads;
+    ThreadPool_job_queue_t jobs;
+    unsigned int num_threads;
+    bool shutdown;
 } ThreadPool_t;
-/**
 
-* C style constructor for creating a new ThreadPool object
-* Parameters:
-*     num - Number of threads to create
-* Return:
-*     ThreadPool_t* - Pointer to the newly created ThreadPool object
-*/
+/**
+ * C style constructor for creating a new ThreadPool object
+ * Parameters:
+ *     num - Number of threads to create
+ * Return:
+ *     ThreadPool_t* - Pointer to the newly created ThreadPool object
+ */
 ThreadPool_t *ThreadPool_create(unsigned int num);
+
 /**
-* C style destructor to destroy a ThreadPool object
-* Parameters:
-*     tp - Pointer to the ThreadPool object to be destroyed
-*/
+ * C style destructor to destroy a ThreadPool object
+ * Parameters:
+ *     tp - Pointer to the ThreadPool object to be destroyed
+ */
 void ThreadPool_destroy(ThreadPool_t *tp);
+
 /**
-* Add a job to the ThreadPool's job queue
-* Parameters:
-*     tp   - Pointer to the ThreadPool object
-*     func - Pointer to the function that will be called by the serving thread
-*     arg  - Arguments for that function
-* Return:
-*     true  - On success
-*     false - Otherwise
-*/
-bool ThreadPool_add_job(ThreadPool_t *tp, thread_func_t func, void *arg);
+ * Add a job to the ThreadPool's job queue in a Shortest Job First (SJF) manner
+ * Parameters:
+ *     tp   - Pointer to the ThreadPool object
+ *     func - Pointer to the function that will be called by the serving thread
+ *     arg  - Arguments for that function
+ *     size - Size of the job, used to prioritize jobs in SJF order
+ * Return:
+ *     true  - On success
+ *     false - Otherwise
+ */
+bool ThreadPool_add_job(ThreadPool_t *tp, thread_func_t func, void *arg, int size);
+
 /**
-* Get a job from the job queue of the ThreadPool object
-* Parameters:
-*     tp - Pointer to the ThreadPool object
-* Return:
-*     ThreadPool_job_t* - Next job to run
-*/
+ * Get a job from the job queue of the ThreadPool object
+ * Parameters:
+ *     tp - Pointer to the ThreadPool object
+ * Return:
+ *     ThreadPool_job_t* - Next job to run (shortest job first)
+ */
 ThreadPool_job_t *ThreadPool_get_job(ThreadPool_t *tp);
+
 /**
-* Start routine of each thread in the ThreadPool Object
-* In a loop, check the job queue, get a job (if any) and run it
-* Parameters:
-*     tp - Pointer to the ThreadPool object containing this thread
-*/
+ * Start routine of each thread in the ThreadPool Object
+ * In a loop, check the job queue, get a job (if any) and run it
+ * Parameters:
+ *     tp - Pointer to the ThreadPool object containing this thread
+ */
 void *Thread_run(ThreadPool_t *tp);
+
 /**
-* Ensure that all threads are idle and the job queue is empty before returning
-* Parameters:
-*     tp - Pointer to the ThreadPool object that will be destroyed
-*/
+ * Ensure that all threads are idle and the job queue is empty before returning
+ * Parameters:
+ *     tp - Pointer to the ThreadPool object that will be destroyed
+ */
 void ThreadPool_check(ThreadPool_t *tp);
+
 #endif

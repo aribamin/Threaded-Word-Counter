@@ -13,7 +13,7 @@ void test_job(void *arg) {
     int job_num = *(int *)arg;
     printf("Executing job %d\n", job_num);
 
-    // Simulate work with a sleep
+    // Simulate work with a small sleep to represent job duration
     usleep(100000); // 100 milliseconds
 
     // Increment job counter with mutex for thread safety
@@ -40,10 +40,13 @@ int main() {
     int job_ids[num_jobs];
     for (int i = 0; i < num_jobs; i++) {
         job_ids[i] = i;
-        if (!ThreadPool_add_job(pool, test_job, &job_ids[i])) {
+        int job_size = rand() % 100; // Random size for SJF simulation
+
+        // Adding job to the thread pool with the random size
+        if (!ThreadPool_add_job(pool, test_job, &job_ids[i], job_size)) {
             fprintf(stderr, "Failed to add job %d\n", i);
         } else {
-            printf("Job %d added to the pool.\n", i);
+            printf("Job %d with size %d added to the pool.\n", i, job_size);
         }
     }
 

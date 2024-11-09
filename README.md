@@ -28,6 +28,7 @@ Data Structures
 Job Queue: A linked list of jobs (or tasks) for each thread to complete. Each job is just a function and its inputs.
 Head Pointer: Points to the next job in line.
 ThreadPool_job_queue_t: Keeps track of how many jobs there are, how many were completed, and if all jobs are done.
+The size parameter needs to be added so that each job can have a "priority" value, allowing the thread pool to identify which jobs are "shorter" or "quicker." By knowing the size of each job, we can organize them in the queue to ensure that the shortest job is always picked first, implementing the Shortest Job First (SJF) scheduling. Without the size parameter, the pool wouldn't know which job is shorter, so it couldn’t prioritize jobs effectively.
 
 2. MapReduce Partitions
 Partition Array: Divides the data into sections (partitions) to spread the work across reducers.
