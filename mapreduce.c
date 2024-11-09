@@ -79,33 +79,37 @@ unsigned int MR_Partitioner(char *key, unsigned int num_partitions) {
 // Emit function called by the Mapper to add a key-value pair to a partition
 void MR_Emit(char *key, char *value) {
     if (key == NULL || strlen(key) == 0) {
-        printf("[MR_Emit] Skipping empty key.\n");
+        // printf("[MR_Emit] Skipping empty key.\n");
         return;
     }
     // Determine the partition index for the key
     unsigned int partition_idx = MR_Partitioner(key, num_partitions);
-    printf("[MR_Emit] Key: %s, Value: %s, Partition: %u\n", key, value, partition_idx);
+    // printf("[MR_Emit] Key: %s, Value: %s, Partition: %u\n", key, value, partition_idx);
     insert_into_partition(partition_idx, key, value);
 }
 
 // Retrieves the next value associated with a key from a partition
 char *MR_GetNext(char *key, unsigned int partition_idx) {
+    if (partition_idx >= num_partitions || !key) {
+        // fprintf(stderr, "[MR_GetNext] Invalid partition index or null key.\n");
+        return NULL;
+    }
+
     Partition *partition = &partitions[partition_idx];
     pthread_mutex_lock(&partition->lock);
 
-    // Search for the key and return the next available value, if any
+    char *value = NULL;
     for (unsigned int i = 0; i < partition->pair_count; i++) {
-        if (strcmp(partition->pairs[i].key, key) == 0) {
+        if (partition->pairs[i].key && strcmp(partition->pairs[i].key, key) == 0) {
             if (partition->pairs[i].value_count > 0) {
-                char *value = partition->pairs[i].values[--partition->pairs[i].value_count];
-                pthread_mutex_unlock(&partition->lock);
-                return value;
+                value = strdup(partition->pairs[i].values[--partition->pairs[i].value_count]);
             }
+            break;
         }
     }
 
     pthread_mutex_unlock(&partition->lock);
-    return NULL;
+    return value;
 }
 
 // Comparison function for sorting key-value pairs lexicographically
