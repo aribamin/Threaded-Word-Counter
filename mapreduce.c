@@ -67,7 +67,6 @@ void insert_into_partition(unsigned int partition_idx, char *key, char *value) {
 }
 
 // Hash function to determine which partition a key should be placed in
-// Uses a simple hash function to return an index within the partition array
 unsigned int MR_Partitioner(char *key, unsigned int num_partitions) {
     unsigned long hash = 5381;
     int c;
@@ -90,7 +89,6 @@ void MR_Emit(char *key, char *value) {
 }
 
 // Retrieves the next value associated with a key from a partition
-// Used by the Reducer to iterate through all values of a given key
 char *MR_GetNext(char *key, unsigned int partition_idx) {
     Partition *partition = &partitions[partition_idx];
     pthread_mutex_lock(&partition->lock);
@@ -107,15 +105,24 @@ char *MR_GetNext(char *key, unsigned int partition_idx) {
     }
 
     pthread_mutex_unlock(&partition->lock);
-    return NULL;  // No more values for the key
+    return NULL;
+}
+
+// Comparison function for sorting key-value pairs lexicographically
+int compare_key_value_pairs(const void *a, const void *b) {
+    KeyValuePair *pairA = (KeyValuePair *)a;
+    KeyValuePair *pairB = (KeyValuePair *)b;
+    return strcmp(pairA->key, pairB->key);
 }
 
 // Reducer task for each partition
-// Calls the user-defined reducer on each key in the partition
 void reduce_task(void *arg) {
     unsigned int partition_idx = *(unsigned int *)arg;
     free(arg);
     Partition *partition = &partitions[partition_idx];
+
+    // Sort key-value pairs in lexicographic order
+    qsort(partition->pairs, partition->pair_count, sizeof(KeyValuePair), compare_key_value_pairs);
 
     // For each key in the partition, call the user-defined reducer
     for (unsigned int i = 0; i < partition->pair_count; i++) {
