@@ -1,0 +1,23 @@
+Correctness [10/40]
+Comment: Most test cases failed
+
+Structure and functionality [15/15]
+Comment:
+
+Runtime [5/5]
+Comment:
+
+Memory Leaks [0/10]
+Comment: Memory leaks detected
+
+Makefile [15/15]
+Comment:
+
+Readme file [15/15]
+Comment:
+
+Other deductions:
+Comment:
+
+Total [60/100]
+Marked by Luke Schultz
