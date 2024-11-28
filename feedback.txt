@@ -1,5 +1,5 @@
-Correctness [10/40]
-Comment: Most test cases failed
+Correctness [25/40]
+Comment: Some test cases failed
 
 Structure and functionality [15/15]
 Comment:
@@ -19,5 +19,5 @@ Comment:
 Other deductions:
 Comment:
 
-Total [60/100]
+Total [75/100]
 Marked by Luke Schultz
