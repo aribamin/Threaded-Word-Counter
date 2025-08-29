@@ -1,7 +1,5 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Name : Arib Amin
-# SID : 1707860
-# CCID : arib1
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 This program counts words in a set of text files using a custom MapReduce approach. MapReduce is a method where we break down tasks (like counting words) into smaller parts so they can be handled in parallel, making the whole process faster. Here, we also use a thread pool to manage multiple threads that do the counting work.
